@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+
 #include "c201.h"
 
 void draw_table() {
@@ -71,32 +72,19 @@ void add_step() {
     Phrase * p = get_phrase_from_step_index(y);
     int pn = which_phrase(y);
     p->len = clamp(p->len+1, 0, 128);
-    for (int i = p->len-2; i >= y; i--) {
-        *get_step_in_phrase(i+1, pn) = *get_step_in_phrase(i, pn);
+    step_init(& p->steps[p->len-1]);
+    for (int i = p->len; i > y; i--) {
+        set_step_in_phrase(i-1, pn, get_step_in_phrase(i, pn));
     }
-    step_init(& p->steps[y]);
 }
-<<<<<<< Updated upstream
-
 void remove_step() {
     Phrase * p = get_phrase_from_step_index(y);
-    int pn = which_phrase(y);
     p->len = clamp(p->len-1, 0, 128);
     for (int i = y; i < p->len; i++) {
-        *get_step_in_phrase(i, pn) = *get_step_in_phrase(i+1, pn);
+        set_step_in_phrase(i, pn, get_step_in_phrase(i+1, pn));
     }
     y = clamp(y-1, 0, get_seqlen());
 }
-=======
-// void remove_step() {
-//     Phrase * p = get_phrase_from_step_index(y);
-//     p->len = clamp(p->len-1, 0, 128);
-//     for (int i = y; i < p->len; i++) {
-//         set_step_in_phrase(i, pn, get_step_in_phrase(i+1, pn));
-//     }
-//     y = clamp(y-1, 0, get_seqlen());
-// }
->>>>>>> Stashed changes
 
 void * keyboard_input(void * arg) {
     while (ch != '0') {
@@ -120,11 +108,11 @@ void * keyboard_input(void * arg) {
                 add_step();
                 break;
             case '-':
-                //remove_step();
+                remove_step();
                 break;
             case 'x':
                 clipboard = *cursor_step;
-                //remove_step();
+                remove_step();
                 break;
             case 'c':
                 clipboard = *cursor_step;
@@ -190,7 +178,7 @@ void * keyboard_input(void * arg) {
 void advance() {
     int old_pos = pos;
     bool any_steps_on;
-    //Phrase * this_phrase = get_phrase_from_step_index(pos);
+    Phrase * this_phrase = get_phrase_from_step_index(pos);
     for (int i=0;i<get_seqlen();i++) { if (get_step(i)->dur) { any_steps_on = true; } }
     if (any_steps_on) {
         if (count < get_step(pos)->dur - 1) { 
@@ -237,7 +225,8 @@ int main() {
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);
-    pthread_join(tid[1], NULL);
+    pthread_exit(NULL);
     endwin();
+    Py_Finalize();
     return 0;
 }
