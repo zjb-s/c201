@@ -76,6 +76,7 @@ void add_step() {
     }
     step_init(& p->steps[y]);
 }
+<<<<<<< Updated upstream
 
 void remove_step() {
     Phrase * p = get_phrase_from_step_index(y);
@@ -86,6 +87,16 @@ void remove_step() {
     }
     y = clamp(y-1, 0, get_seqlen());
 }
+=======
+// void remove_step() {
+//     Phrase * p = get_phrase_from_step_index(y);
+//     p->len = clamp(p->len-1, 0, 128);
+//     for (int i = y; i < p->len; i++) {
+//         set_step_in_phrase(i, pn, get_step_in_phrase(i+1, pn));
+//     }
+//     y = clamp(y-1, 0, get_seqlen());
+// }
+>>>>>>> Stashed changes
 
 void * keyboard_input(void * arg) {
     while (ch != '0') {
@@ -109,11 +120,11 @@ void * keyboard_input(void * arg) {
                 add_step();
                 break;
             case '-':
-                remove_step();
+                //remove_step();
                 break;
             case 'x':
                 clipboard = *cursor_step;
-                remove_step();
+                //remove_step();
                 break;
             case 'c':
                 clipboard = *cursor_step;
@@ -179,7 +190,7 @@ void * keyboard_input(void * arg) {
 void advance() {
     int old_pos = pos;
     bool any_steps_on;
-    Phrase * this_phrase = get_phrase_from_step_index(pos);
+    //Phrase * this_phrase = get_phrase_from_step_index(pos);
     for (int i=0;i<get_seqlen();i++) { if (get_step(i)->dur) { any_steps_on = true; } }
     if (any_steps_on) {
         if (count < get_step(pos)->dur - 1) { 
