@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <Python/Python.h>
 #define MAX_X 0
 
 // global variables
@@ -111,12 +112,15 @@ int get_seqlen() {
 }
 
 Step * get_step(int n) {
-    int pidx = 0;
-
-    while(n >= 0 && n >= phrases[playlist.list[pidx]].len)
-        n -= phrases[playlist.list[ pidx++ ]].len;
-
-    return &phrases[playlist.list[pidx]].steps[n];
+    Step * rs;
+    int step_tally = 0;
+    for (int i=0;i<4;i++) { 
+        step_tally += phrases[playlist.list[i]].len; 
+        if (n <= step_tally) {
+            rs = & phrases[ playlist.list[ i ] ].steps[ ( step_tally - phrases[ playlist.list[ i ] ].len ) + n];
+        }
+    }
+    return rs;
 }
 
 Step * get_step_in_phrase(int step_number, int phrase) {
@@ -124,7 +128,20 @@ Step * get_step_in_phrase(int step_number, int phrase) {
 }
 
 void set_step(int n, Step * s) {
-    *get_step(n) = *s;
+    int step_tally = 0;
+    // get total steps in all phrases in the playlist
+    for (int i=0;i<4;i++) { 
+        Phrase * p = & phrases[playlist.list[i]];
+        if (n < p->len) {
+            phrases[playlist.list[i - step_tally]].steps[n] = *s;
+        }
+        step_tally += p->len; 
+    }
+}
+
+void set_step_in_phrase(int step_number, int phrase, Step * step_pointer) {
+    Step * s = get_step_in_phrase(step_number, phrase);
+    s = step_pointer;
 }
 
 Phrase * get_phrase_from_step_index (int n) {
