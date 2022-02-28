@@ -3,7 +3,6 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-
 #include "c201.h"
 
 void draw_table() {
@@ -72,16 +71,18 @@ void add_step() {
     Phrase * p = get_phrase_from_step_index(y);
     int pn = which_phrase(y);
     p->len = clamp(p->len+1, 0, 128);
-    step_init(& p->steps[p->len-1]);
-    for (int i = p->len; i > y; i--) {
-        set_step_in_phrase(i-1, pn, get_step_in_phrase(i, pn));
+    for (int i = p->len-2; i >= y; i--) {
+        *get_step_in_phrase(i+1, pn) = *get_step_in_phrase(i, pn);
     }
+    step_init(& p->steps[y]);
 }
+
 void remove_step() {
     Phrase * p = get_phrase_from_step_index(y);
+    int pn = which_phrase(y);
     p->len = clamp(p->len-1, 0, 128);
     for (int i = y; i < p->len; i++) {
-        set_step_in_phrase(i, pn, get_step_in_phrase(i+1, pn));
+        *get_step_in_phrase(i, pn) = *get_step_in_phrase(i+1, pn);
     }
     y = clamp(y-1, 0, get_seqlen());
 }
@@ -225,8 +226,7 @@ int main() {
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);
-    pthread_exit(NULL);
+    pthread_join(tid[1], NULL);
     endwin();
-    Py_Finalize();
     return 0;
 }
