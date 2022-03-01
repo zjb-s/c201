@@ -8,7 +8,7 @@
 void draw_table() {
     int px = 15; int py = 8; int next_step_to_print = 0;
     move(py,px);
-    for(int i=0; i<2;i++) { // for each phrase in the playlist
+    for(int i=0; i<playlist.len;i++) { // for each phrase in the playlist
         Phrase * this_phrase = &phrases[playlist.list[i]];
         mvprintw(8+i, 1, "%d", playlist.list[i]);
 
@@ -91,6 +91,7 @@ void * keyboard_input(void * arg) {
     while (ch != '0') {
         cursor_phrase = get_phrase_from_step_index(y);
         cursor_step = get_step(y);
+        cursor_playlist_position = get_playlist_position(y);
 
         switch (ch) {
             case KEY_LEFT:
@@ -109,11 +110,17 @@ void * keyboard_input(void * arg) {
                 add_step();
                 break;
             case '-':
-                //remove_step();
+                remove_step();
+                break;
+            case ']':
+                playlist.list[cursor_playlist_position] = clamp(playlist.list[cursor_playlist_position]+1, 0, 128);
+                break;
+            case '[':
+                playlist.list[cursor_playlist_position] = clamp(playlist.list[cursor_playlist_position]-1, 0, 128);
                 break;
             case 'x':
                 clipboard = *cursor_step;
-                //remove_step();
+                remove_step();
                 break;
             case 'c':
                 clipboard = *cursor_step;
@@ -166,20 +173,19 @@ void * keyboard_input(void * arg) {
     return 0;
 }
 
-// void note() {
-//     char * command;
-//     asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
-//     system(command);
-//     free(command);
-//     // todo implement midi out
-//     // todo implement gates
-//     // todo implement repeats
-// }
+void note() {
+    char * command;
+    asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
+    system(command);
+    free(command);
+    // todo implement midi out
+    // todo implement gates
+    // todo implement repeats
+}
 
 void advance() {
     int old_pos = pos;
     bool any_steps_on;
-    //Phrase * this_phrase = get_phrase_from_step_index(pos);
     for (int i=0;i<get_seqlen();i++) { if (get_step(i)->dur) { any_steps_on = true; } }
     if (any_steps_on) {
         if (count < get_step(pos)->dur - 1) { 
@@ -210,7 +216,6 @@ void * fast_tick(void * arg) {
             clock_step();
         }
         if (dirty) { redraw(); }
-        //playhead_step = get_step(pos);
     }
     return 0;
 }
@@ -219,8 +224,8 @@ int main() {
     init_curses();
     playlist_init(&playlist);
     playlist.list[1] = 1;
-    phrase_init(&phrases[1]);
     phrase_init(&phrases[0]);
+    phrase_init(&phrases[1]);
     clipboard = phrases[playlist.list[0]].steps[0];
     cursor_step = get_step(0);
 

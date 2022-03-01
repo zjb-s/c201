@@ -17,6 +17,7 @@ int t = 0;
 int seqlen = 0;
 int count = 0;
 int pos = 0;
+int cursor_playlist_position = 0;
 
 
 // step class
@@ -63,6 +64,7 @@ typedef struct {
     int list[128];
     int start;
     int end;
+    int len;
 } Playlist;
 
 //playlist constructor
@@ -70,6 +72,7 @@ void playlist_init(Playlist * p) {
     for(int i=0;i<128;i++) { p->list[i] = 0; }
     p->start = 0;
     p->end = 0;
+    p->len = 4;
 }
 
 // utilities                                        ---
@@ -101,9 +104,15 @@ Step * playhead_step;
 Step * active_step;
 Step clipboard;
 
+void init_phrase_library() {
+    for (int i=0;i<127;i++) {
+        phrase_init(& phrases[i]);
+    }
+}
+
 int get_seqlen() {
     int step_tally = 0;
-    for (int i=0;i<4;i++){
+    for (int i=0;i<playlist.len;i++){
         step_tally += phrases[playlist.list[i]].len;
     }
     seqlen = step_tally;
@@ -130,7 +139,7 @@ void set_step(int n, Step * s) {
 Phrase * get_phrase_from_step_index (int n) {
     Phrase * rval = & phrases[playlist.list[0]];
     int step_tally = 0;
-    for (int i=0;i<4;i++) { 
+    for (int i=0;i<playlist.len;i++) { 
         step_tally += phrases[playlist.list[i]].len; 
         if (n <= step_tally) {
             rval = & phrases[playlist.list[i]];
@@ -139,14 +148,27 @@ Phrase * get_phrase_from_step_index (int n) {
     return rval;
 }
 
+// return the phrase containing this step
 int which_phrase (int n) {
     int rval = playlist.list[0];
     int step_tally = 0;
-    for (int i=0;i<4;i++) { 
+    for (int i=0;i<playlist.len;i++) { 
         step_tally += phrases[playlist.list[i]].len; 
         if (n <= step_tally) {
             rval = playlist.list[i];
         }
     }
     return rval;
+}
+
+// same as which_phrase, but return the playlist index
+int get_playlist_position (int n) {
+    int step_tally = 0;
+    for (int i=0;i<playlist.len;i++) { 
+        step_tally += phrases[playlist.list[i]].len; 
+        if (n <= step_tally) {
+            return i;
+        }
+    }
+    return 0;
 }
