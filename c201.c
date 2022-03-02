@@ -30,7 +30,7 @@ void draw_table() {
                 mvprintw(py,px+45," %d ", count);
                 attroff(A_REVERSE);
             }
-            if (y == next_step_to_print) {
+            if (cursor.pos_in_sequence == next_step_to_print) {
                 mvprintw(py, px, "-----------------------------------");
             }
             Step * this_step = get_step(next_step_to_print);
@@ -59,7 +59,7 @@ void draw_context() {
 void redraw() {
     clear();
     attroff(A_REVERSE);
-    mvprintw(1,1,"y: %d, pos: %d, phrase 0 len: %d", y, pos, phrases[playlist.list[0]].len);
+    mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
     box(stdscr, ACS_VLINE, ACS_HLINE);
     draw_context();
     draw_table();
@@ -68,43 +68,35 @@ void redraw() {
 }
 
 void add_step() {
-    Phrase * p = get_phrase_from_step_index(y);
-    int pn = which_phrase(y);
-    p->len = clamp(p->len+1, 0, 128);
-    for (int i = p->len-2; i >= y; i--) {
-        *get_step_in_phrase(i+1, pn) = *get_step_in_phrase(i, pn);
+    cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len+1, 0, 128);
+    for (int i = cursor.phrase_pointer->len-2; i >= cursor.pos_in_phrase; i--) {
+        cursor.phrase_pointer->steps[cursor.pos_in_phrase + 1] = * cursor.step_pointer;
     }
-    step_init(& p->steps[y]);
+    step_init(cursor.step_pointer);
 }
 
 void remove_step() {
-    Phrase * p = get_phrase_from_step_index(y);
-    int pn = which_phrase(y);
-    p->len = clamp(p->len-1, 0, 128);
-    for (int i = y; i < p->len; i++) {
-        *get_step_in_phrase(i, pn) = *get_step_in_phrase(i+1, pn);
+    cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len-1, 0, 128);
+    move_cursor(-1);
+    for (int i = cursor.pos_in_sequence; i < cursor.phrase_pointer->len; i++) {
+        *get_step_in_phrase(i, cursor.pos_in_playlist) = *get_step_in_phrase(i+1, cursor.pos_in_playlist);
     }
-    y = clamp(y-1, 0, get_seqlen());
 }
 
 void * keyboard_input(void * arg) {
     while (ch != '0') {
-        cursor_phrase = get_phrase_from_step_index(y);
-        cursor_step = get_step(y);
-        cursor_playlist_position = get_playlist_position(y);
-
         switch (ch) {
             case KEY_LEFT:
-                x = clamp(x-1, 0, MAX_X);
                 break;
             case KEY_DOWN:
-                y = clamp(y+1, 0, get_seqlen()-1);
+                // y = clamp(y+1, 0, get_seqlen()-1);
+                move_cursor(1);
                 break;
             case KEY_UP:
-                y = clamp(y-1, 0, get_seqlen()-1);
+                move_cursor(-1);
                 break;
             case KEY_RIGHT:
-                x = clamp(x+1, 0, MAX_X);
+                //x = clamp(x+1, 0, MAX_X);
                 break;
             case '=':
                 add_step();
@@ -113,57 +105,59 @@ void * keyboard_input(void * arg) {
                 remove_step();
                 break;
             case ']':
-                playlist.list[cursor_playlist_position] = clamp(playlist.list[cursor_playlist_position]+1, 0, 128);
+                playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist]+1, 0, 128);
+                cursor.phrase_pointer = & phrases[cursor.pos_in_playlist];
                 break;
             case '[':
-                playlist.list[cursor_playlist_position] = clamp(playlist.list[cursor_playlist_position]-1, 0, 128);
+                playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist]-1, 0, 128);
+                cursor.phrase_pointer = & phrases[cursor.pos_in_playlist];
                 break;
             case 'x':
-                clipboard = *cursor_step;
+                clipboard = cursor.step_pointer;
                 remove_step();
                 break;
             case 'c':
-                clipboard = *cursor_step;
+                clipboard = *cursor.step_pointer;
                 break;
             case 'v':
                 add_step();
                 set_step(y+1, &clipboard);
                 break;
             case 'q':
-                cursor_step->cva = clamp(cursor_step->cva+1, 0, 128);
+                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva+1, 0, 128);
                 break;
             case 'w':
-                cursor_step->cvb = clamp(cursor_step->cvb+1, 0, 128);
+                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb+1, 0, 128);
                 break;
             case 'e':
-                cursor_step->dur = clamp(cursor_step->dur+1, 0, 128);
+                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur+1, 0, 128);
                 break;
             case 'a':
-                cursor_step->cva = clamp(cursor_step->cva-1, 0, 128);
+                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva-1, 0, 128);
                 break;
             case 's':
-                cursor_step->cvb = clamp(cursor_step->cvb-1, 0, 128);
+                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb-1, 0, 128);
                 break;
             case 'd':
-                cursor_step->dur = clamp(cursor_step->dur-1, 0, 128);
+                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur-1, 0, 128);
                 break;
             case 'Q':
-                cursor_step->gate = clamp(cursor_step->gate+1, 0, 128);
+                cursor.step_pointer->gate = clamp(cursor.step_pointer->gate+1, 0, 128);
                 break;
             case 'W':
-                cursor_step->prob = clamp(cursor_step->prob+1, 0, 100);
+                cursor.step_pointer->prob = clamp(cursor.step_pointer->prob+1, 0, 100);
                 break;
             case 'E':
-                cursor_step->every = clamp(cursor_step->every+1, 1, 128);
+                cursor.step_pointer->every = clamp(cursor.step_pointer->every+1, 1, 128);
                 break;
             case 'A':
-                cursor_step->gate = clamp(cursor_step->gate-1, 0, 128);
+                cursor.step_pointer->gate = clamp(cursor.step_pointer->gate-1, 0, 128);
                 break;
             case 'S':
-                cursor_step->prob = clamp(cursor_step->prob-1, 0, 100);
+                cursor.step_pointer->prob = clamp(cursor.step_pointer->prob-1, 0, 100);
                 break;
             case 'D':
-                cursor_step->every = clamp(cursor_step->every-1, 1, 128);
+                cursor.step_pointer->every = clamp(cursor.step_pointer->every-1, 1, 128);
                 break;
         }
 
@@ -223,11 +217,12 @@ void * fast_tick(void * arg) {
 int main() {
     init_curses();
     playlist_init(&playlist);
-    playlist.list[1] = 1;
     phrase_init(&phrases[0]);
-    phrase_init(&phrases[1]);
+    cursor_init(& cursor);
+    cursor.step_pointer = & phrases[0].steps[0];
+    cursor.phrase_pointer = & phrases[0];
+
     clipboard = phrases[playlist.list[0]].steps[0];
-    cursor_step = get_step(0);
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);

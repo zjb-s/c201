@@ -3,7 +3,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-#define MAX_X 0
+#define MAX_X 1
 
 // global variables
 bool dirty = true;
@@ -18,7 +18,6 @@ int seqlen = 0;
 int count = 0;
 int pos = 0;
 int cursor_playlist_position = 0;
-
 
 // step class
 typedef struct {
@@ -67,6 +66,21 @@ typedef struct {
     int len;
 } Playlist;
 
+// cursor class
+typedef struct {
+    int pos_in_sequence;
+    int pos_in_playlist;
+    int pos_in_phrase;
+    Step * step_pointer;
+    Phrase * phrase_pointer;
+} Cursor;
+
+// cursor constructor
+void cursor_init(Cursor * c) {
+    c->pos_in_sequence = 0;
+    c-> pos_in_playlist = 0;
+    c->pos_in_phrase = 0;
+}
 //playlist constructor
 void playlist_init(Playlist * p) {
     for(int i=0;i<128;i++) { p->list[i] = 0; }
@@ -95,6 +109,7 @@ void init_curses() {
 
 // more global variables
 pthread_t tid[16];
+Cursor cursor;
 Playlist playlist;
 Phrase phrases[128];
 Phrase * cursor_phrase;
@@ -171,4 +186,41 @@ int get_playlist_position (int n) {
         }
     }
     return 0;
+}
+
+void move_cursor(int delta) {
+    if (delta > 0) { // move down
+        if (cursor.pos_in_sequence >= get_seqlen()-1) {
+            cursor.pos_in_sequence = get_seqlen()-1;
+            cursor.pos_in_playlist = playlist.len-1;
+            return; // set position to end
+        }
+        cursor.pos_in_sequence++;
+
+        if (cursor.pos_in_phrase + delta < cursor.phrase_pointer->len) {
+            cursor.pos_in_phrase++;
+        } else {
+            cursor.pos_in_playlist++;
+            cursor.pos_in_phrase = 0;
+            cursor.phrase_pointer = & phrases[playlist.list[cursor.pos_in_playlist]];
+            cursor.step_pointer = & cursor.phrase_pointer->steps[0];
+        }
+
+    } else { // move up
+        if (cursor.pos_in_sequence <= 0) {
+            cursor.pos_in_sequence = 0;
+            cursor.pos_in_playlist = 0;
+            return; // set position to start
+        }
+        cursor.pos_in_sequence--;
+
+        if (cursor.pos_in_phrase + delta > 0) {
+            cursor.pos_in_phrase--;
+        } else {
+            cursor.pos_in_playlist--;
+            cursor.phrase_pointer = & phrases[playlist.list[cursor.pos_in_playlist]];
+            cursor.pos_in_phrase = cursor.phrase_pointer->len;
+            cursor.step_pointer = & cursor.phrase_pointer->steps[cursor.pos_in_phrase];
+        }
+    }
 }
