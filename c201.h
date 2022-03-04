@@ -22,7 +22,7 @@ int t = 0;
 int seqlen = 0;
 int count = 0;
 int pos = 0;
-int cursor_playlist_position = 0;
+int delta_counter = 0;
 
 // step class
 typedef struct {
@@ -187,4 +187,8 @@ void cursor_move(int delta) {
         }
     }
     cursor_resolve();
+}
+
+void delta(const monome_event_t *e) {
+    delta_counter++;
 }

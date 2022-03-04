@@ -65,9 +65,13 @@ void draw_context() {
         mvprintw(8,80,"pos_in_phrase: %d", cursor.pos_in_phrase);
         mvprintw(9,80,"cursor step cva: %d", cursor.step_pointer->cva);
         mvprintw(10,80,"cursor step id: %d", cursor.step_pointer->id);
+        mvprintw(11,80,"delta counter: %d", delta_counter);
     }
 }
 
+void arc_redraw() {
+    monome_led_ring_all(arc, 2, 15);
+}
 
 void redraw() {
     clear();
@@ -76,6 +80,7 @@ void redraw() {
     box(stdscr, ACS_VLINE, ACS_HLINE);
     draw_table();
     draw_context();
+    arc_redraw();
     refresh();
     dirty = false;
 }
@@ -228,6 +233,9 @@ void * fast_tick(void * arg) {
 }
 
 int main(int argc, char **argv) {
+    arc = monome_open(DEFAULT_MONOME_DEVICE);
+    void * bb = NULL;
+    monome_register_handler(arc, MONOME_ENCODER_DELTA, delta, bb);
     init_curses();
     playlist_init(&playlist);
     phrase_init(&phrases[0]);
