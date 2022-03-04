@@ -3,7 +3,12 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <monome.h>
+
 #define MAX_X 1
+#define DEFAULT_MONOME_DEVICE "/dev/tty.usbserial-m1100276"
+#define KNOBS 4
+#define DEBUG 1
 
 // global variables
 bool dirty = true;
@@ -118,6 +123,7 @@ Step * cursor_step;
 Step * playhead_step;
 Step * active_step;
 Step clipboard;
+monome_t * arc;
 
 void init_phrase_library() {
     for (int i=0;i<127;i++) {
@@ -151,76 +157,34 @@ void set_step(int n, Step * s) {
     *get_step(n) = *s;
 }
 
-Phrase * get_phrase_from_step_index (int n) {
-    Phrase * rval = & phrases[playlist.list[0]];
-    int step_tally = 0;
-    for (int i=0;i<playlist.len;i++) { 
-        step_tally += phrases[playlist.list[i]].len; 
-        if (n <= step_tally) {
-            rval = & phrases[playlist.list[i]];
-        }
-    }
-    return rval;
+void cursor_resolve() { // clamp values, set up pointers, etc
+    cursor.pos_in_phrase =      clamp(cursor.pos_in_phrase, 0, cursor.phrase_pointer->len-1);
+    cursor.pos_in_playlist =    clamp(cursor.pos_in_playlist, 0, playlist.len-1);
+    cursor.pos_in_sequence =    clamp(cursor.pos_in_sequence, 0, get_seqlen()-1);
+
+    cursor.phrase_pointer = &   phrases[playlist.list[cursor.pos_in_playlist]];
+    cursor.step_pointer = &     cursor.phrase_pointer->steps[cursor.pos_in_phrase];
 }
 
-// return the phrase containing this step
-int which_phrase (int n) {
-    int rval = playlist.list[0];
-    int step_tally = 0;
-    for (int i=0;i<playlist.len;i++) { 
-        step_tally += phrases[playlist.list[i]].len; 
-        if (n <= step_tally) {
-            rval = playlist.list[i];
-        }
-    }
-    return rval;
-}
-
-// same as which_phrase, but return the playlist index
-int get_playlist_position (int n) {
-    int step_tally = 0;
-    for (int i=0;i<playlist.len;i++) { 
-        step_tally += phrases[playlist.list[i]].len; 
-        if (n <= step_tally) {
-            return i;
-        }
-    }
-    return 0;
-}
-
-void move_cursor(int delta) {
-    if (delta > 0) { // move down
-        if (cursor.pos_in_sequence >= get_seqlen()-1) {
-            cursor.pos_in_sequence = get_seqlen()-1;
-            cursor.pos_in_playlist = playlist.len-1;
-            return; // set position to end
-        }
+void cursor_move(int delta) {
+    if (delta > 0) {
         cursor.pos_in_sequence++;
-
-        if (cursor.pos_in_phrase + delta < cursor.phrase_pointer->len) {
+        if (cursor.pos_in_phrase<cursor.phrase_pointer->len) { // is there room to advance within current phrase?
             cursor.pos_in_phrase++;
         } else {
             cursor.pos_in_playlist++;
             cursor.pos_in_phrase = 0;
-            cursor.phrase_pointer = & phrases[playlist.list[cursor.pos_in_playlist]];
-            cursor.step_pointer = & cursor.phrase_pointer->steps[0];
         }
-
-    } else { // move up
-        if (cursor.pos_in_sequence <= 0) {
-            cursor.pos_in_sequence = 0;
-            cursor.pos_in_playlist = 0;
-            return; // set position to start
-        }
+    } else if (delta < 0) {
         cursor.pos_in_sequence--;
-
-        if (cursor.pos_in_phrase + delta > 0) {
+        if (cursor.pos_in_phrase > 0) {
             cursor.pos_in_phrase--;
         } else {
             cursor.pos_in_playlist--;
-            cursor.phrase_pointer = & phrases[playlist.list[cursor.pos_in_playlist]];
-            cursor.pos_in_phrase = cursor.phrase_pointer->len;
-            cursor.step_pointer = & cursor.phrase_pointer->steps[cursor.pos_in_phrase];
+            if (cursor.pos_in_playlist >= 0) {
+                cursor.pos_in_phrase = phrases[playlist.list[cursor.pos_in_playlist]].len-1;
+            }
         }
     }
+    cursor_resolve();
 }

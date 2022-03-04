@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <monome.h> 
 
 #include "c201.h"
 
@@ -53,16 +54,28 @@ void draw_context() {
     mvprintw(bottom, 2, "phrase view"); //todo implement movement view & arrangement view
     mvprintw(bottom, 30, "clipboard step: [%d, %d, %d, %d]", clipboard.cva, clipboard.cvb, clipboard.dur, clipboard.gate);
     mvprintw(bottom -1, 2, "seqlen: %d", get_seqlen());
+
+    if (DEBUG) {
+        attron(A_REVERSE);
+        mvprintw(1,1,"DEBUG MODE");
+        mvprintw(5,80,"DEBUG PANEL");
+        attroff(A_REVERSE);
+        mvprintw(6,80,"pos_in_sequence: %d", cursor.pos_in_sequence);
+        mvprintw(7,80,"pos_in_playlist: %d", cursor.pos_in_playlist);
+        mvprintw(8,80,"pos_in_phrase: %d", cursor.pos_in_phrase);
+        mvprintw(9,80,"cursor step cva: %d", cursor.step_pointer->cva);
+        mvprintw(10,80,"cursor step id: %d", cursor.step_pointer->id);
+    }
 }
 
 
 void redraw() {
     clear();
     attroff(A_REVERSE);
-    mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
+    //mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
     box(stdscr, ACS_VLINE, ACS_HLINE);
-    draw_context();
     draw_table();
+    draw_context();
     refresh();
     dirty = false;
 }
@@ -77,7 +90,7 @@ void add_step() {
 
 void remove_step() {
     cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len-1, 0, 128);
-    move_cursor(-1);
+    cursor_move(-1);
     for (int i = cursor.pos_in_sequence; i < cursor.phrase_pointer->len; i++) {
         *get_step_in_phrase(i, cursor.pos_in_playlist) = *get_step_in_phrase(i+1, cursor.pos_in_playlist);
     }
@@ -90,10 +103,10 @@ void * keyboard_input(void * arg) {
                 break;
             case KEY_DOWN:
                 // y = clamp(y+1, 0, get_seqlen()-1);
-                move_cursor(1);
+                cursor_move(1);
                 break;
             case KEY_UP:
-                move_cursor(-1);
+                cursor_move(-1);
                 break;
             case KEY_RIGHT:
                 //x = clamp(x+1, 0, MAX_X);
@@ -113,11 +126,11 @@ void * keyboard_input(void * arg) {
                 cursor.phrase_pointer = & phrases[cursor.pos_in_playlist];
                 break;
             case 'x':
-                clipboard = cursor.step_pointer;
+                clipboard = * cursor.step_pointer;
                 remove_step();
                 break;
             case 'c':
-                clipboard = *cursor.step_pointer;
+                clipboard = * cursor.step_pointer;
                 break;
             case 'v':
                 add_step();
@@ -214,14 +227,13 @@ void * fast_tick(void * arg) {
     return 0;
 }
 
-int main() {
+int main(int argc, char **argv) {
     init_curses();
     playlist_init(&playlist);
     phrase_init(&phrases[0]);
     cursor_init(& cursor);
     cursor.step_pointer = & phrases[0].steps[0];
     cursor.phrase_pointer = & phrases[0];
-
     clipboard = phrases[playlist.list[0]].steps[0];
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
