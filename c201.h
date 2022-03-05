@@ -6,12 +6,11 @@
 #include <monome.h>
 
 #define MAX_X 1
-#define DEFAULT_MONOME_DEVICE "/dev/tty.usbserial-m1100276"
+#define DEFAULT_MONOME_DEVICE "/dev/ttyUSB0"
 #define KNOBS 4
 #define ARC_SENSITIVITY 24
 
 // global variables
-bool dirty = true;
 int every_counter = 0;
 int step_id_counter = 1;
 int phrase_id_counter = 0;
@@ -25,8 +24,28 @@ int pos = 0;
 int delta_counters[] = {0,0,0,0};
 bool debug = false;
 
+// print checkers
+typedef struct {
+	bool arc;
+	bool screen;
+	bool playlist;
+	bool count;
+	bool table;
+	bool cursor;
+} Screen;
+
+void screen_init(Screen * s) {
+	s->arc = true;
+	s->screen = true;
+	s->playlist = true;
+	s->count = true;
+	s->table = true;
+	s->cursor = true;
+}
+
 // step class
 typedef struct {
+	bool dirty;
     int id;
     int cva;
     int cvb;
@@ -38,6 +57,7 @@ typedef struct {
 
 // step constructor                                 ---
 void step_init(Step * s) {
+	s->dirty = true;
     step_id_counter++;
     s->id = step_id_counter;
     s->cva = 12;
@@ -115,6 +135,7 @@ void init_curses() {
 
 // more global variables
 pthread_t tid[16];
+Screen screen;
 Cursor cursor;
 Playlist playlist;
 Phrase phrases[128];
@@ -165,7 +186,9 @@ void cursor_resolve() { // clamp values, set up pointers, etc
     cursor.pos_in_sequence =    clamp(cursor.pos_in_sequence, 0, get_seqlen()-1);
 
     cursor.phrase_pointer = &   phrases[playlist.list[cursor.pos_in_playlist]];
+	cursor.step_pointer->dirty = true;
     cursor.step_pointer = &     cursor.phrase_pointer->steps[cursor.pos_in_phrase];
+	cursor.step_pointer->dirty = true;
 }
 
 void cursor_move(int delta) {
@@ -217,5 +240,6 @@ void delta(const monome_event_t *e) {
             cursor_move(change_to_send);
             break;
     }
-    dirty = true;
+    screen.arc = true;
+	cursor.step_pointer->dirty = true;
 }
