@@ -8,7 +8,7 @@
 #define MAX_X 1
 #define DEFAULT_MONOME_DEVICE "/dev/tty.usbserial-m1100276"
 #define KNOBS 4
-#define DEBUG 1
+#define ARC_SENSITIVITY 24
 
 // global variables
 bool dirty = true;
@@ -22,7 +22,8 @@ int t = 0;
 int seqlen = 0;
 int count = 0;
 int pos = 0;
-int delta_counter = 0;
+int delta_counters[] = {0,0,0,0};
+bool debug = false;
 
 // step class
 typedef struct {
@@ -30,7 +31,7 @@ typedef struct {
     int cva;
     int cvb;
     int dur;
-    int gate;
+    bool on;
     int prob;
     int every;
 } Step;
@@ -42,7 +43,7 @@ void step_init(Step * s) {
     s->cva = 12;
     s->cvb = 12;
     s->dur = 1;
-    s->gate = 1;
+    s->on = true;
     s->prob = 100;
     s->every = 1;
 }
@@ -124,6 +125,7 @@ Step * playhead_step;
 Step * active_step;
 Step clipboard;
 monome_t * arc;
+uint8_t * arc_map[64];
 
 void init_phrase_library() {
     for (int i=0;i<127;i++) {
@@ -190,5 +192,30 @@ void cursor_move(int delta) {
 }
 
 void delta(const monome_event_t *e) {
-    delta_counter++;
+    int d = e->encoder.delta; 
+    int n = e->encoder.number;
+    int change_to_send = 0;
+    delta_counters[n] += d;
+    if (delta_counters[n] > ARC_SENSITIVITY) {
+        delta_counters[n] = 0;
+        change_to_send = 1;
+    } else if (delta_counters[n] < 0) {
+        delta_counters[n] = ARC_SENSITIVITY;
+        change_to_send = -1;
+    }
+    switch (n) {
+        case 0:
+            cursor.step_pointer->cva = clamp(cursor.step_pointer->cva + (change_to_send / 1), 0, 127); 
+            break;
+        case 1:
+            cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb + (change_to_send / 1), 0, 127); 
+            break;
+        case 2:
+            cursor.step_pointer->dur = clamp(cursor.step_pointer->dur + (change_to_send / 1), 0, 127); 
+            break;
+        case 3:
+            cursor_move(change_to_send);
+            break;
+    }
+    dirty = true;
 }

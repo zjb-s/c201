@@ -39,7 +39,11 @@ void draw_table() {
             mvprintw(py, px+0,      "%d", this_step->cva);
             mvprintw(py, px+7,      "%d", this_step->cvb);
             mvprintw(py, px+14,     "%d", this_step->dur);
-            mvprintw(py, px+21,     "%d", this_step->gate);
+            if (this_step->on) { 
+                attron(A_REVERSE);
+                mvprintw(py, px+21,     "   ");
+                attroff(A_REVERSE);
+            }
             mvprintw(py, px+28,     "%d", this_step->prob);
             mvprintw(py, px+35,     "%d", this_step->every);
             mvprintw(py, px+42,     "%d", this_step->id);
@@ -52,10 +56,10 @@ void draw_context() {
     int bottom = getmaxy(stdscr)-2;
     mvprintw(5, 15, "cv.a   cv.b   dur    gate   prob   ev    id");
     mvprintw(bottom, 2, "phrase view"); //todo implement movement view & arrangement view
-    mvprintw(bottom, 30, "clipboard step: [%d, %d, %d, %d]", clipboard.cva, clipboard.cvb, clipboard.dur, clipboard.gate);
+    mvprintw(bottom, 30, "clipboard step: [%d, %d, %d, %d]", clipboard.cva, clipboard.cvb, clipboard.dur, clipboard.on);
     mvprintw(bottom -1, 2, "seqlen: %d", get_seqlen());
 
-    if (DEBUG) {
+    if (debug) {
         attron(A_REVERSE);
         mvprintw(1,1,"DEBUG MODE");
         mvprintw(5,80,"DEBUG PANEL");
@@ -65,12 +69,15 @@ void draw_context() {
         mvprintw(8,80,"pos_in_phrase: %d", cursor.pos_in_phrase);
         mvprintw(9,80,"cursor step cva: %d", cursor.step_pointer->cva);
         mvprintw(10,80,"cursor step id: %d", cursor.step_pointer->id);
-        mvprintw(11,80,"delta counter: %d", delta_counter);
     }
 }
 
 void arc_redraw() {
-    monome_led_ring_all(arc, 2, 15);
+    int i;
+    for(i=0;i<4;i++) { monome_led_ring_all(arc, i, 0); } // all lights off
+    monome_led_ring_range(arc, 0, 0, (cursor.step_pointer->cva / 2)-1, 15);
+    monome_led_ring_range(arc, 1, 0, (cursor.step_pointer->cvb / 2)-1, 15);
+    monome_led_ring_range(arc, 2, 0, (cursor.step_pointer->dur / 2)-1, 15);
 }
 
 void redraw() {
@@ -86,7 +93,7 @@ void redraw() {
 }
 
 void add_step() {
-    cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len+1, 0, 128);
+    cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len+1, 0, 127);
     for (int i = cursor.phrase_pointer->len-2; i >= cursor.pos_in_phrase; i--) {
         cursor.phrase_pointer->steps[cursor.pos_in_phrase + 1] = * cursor.step_pointer;
     }
@@ -94,14 +101,14 @@ void add_step() {
 }
 
 void remove_step() {
-    cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len-1, 0, 128);
+    cursor.phrase_pointer->len = clamp(cursor.phrase_pointer->len-1, 0, 127);
     cursor_move(-1);
     for (int i = cursor.pos_in_sequence; i < cursor.phrase_pointer->len; i++) {
         *get_step_in_phrase(i, cursor.pos_in_playlist) = *get_step_in_phrase(i+1, cursor.pos_in_playlist);
     }
 }
 
-void * keyboard_input(void * arg) {
+void * keyboard_input() {
     while (ch != '0') {
         switch (ch) {
             case KEY_LEFT:
@@ -123,11 +130,11 @@ void * keyboard_input(void * arg) {
                 remove_step();
                 break;
             case ']':
-                playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist]+1, 0, 128);
+                playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist]+1, 0, 127);
                 cursor.phrase_pointer = & phrases[cursor.pos_in_playlist];
                 break;
             case '[':
-                playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist]-1, 0, 128);
+                playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist]-1, 0, 127);
                 cursor.phrase_pointer = & phrases[cursor.pos_in_playlist];
                 break;
             case 'x':
@@ -142,40 +149,40 @@ void * keyboard_input(void * arg) {
                 set_step(y+1, &clipboard);
                 break;
             case 'q':
-                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva+1, 0, 128);
+                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva+1, 0, 127);
                 break;
             case 'w':
-                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb+1, 0, 128);
+                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb+1, 0, 127);
                 break;
             case 'e':
-                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur+1, 0, 128);
+                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur+1, 0, 127);
                 break;
             case 'a':
-                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva-1, 0, 128);
+                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva-1, 0, 127);
                 break;
             case 's':
-                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb-1, 0, 128);
+                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb-1, 0, 127);
                 break;
             case 'd':
-                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur-1, 0, 128);
+                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur-1, 0, 127);
                 break;
             case 'Q':
-                cursor.step_pointer->gate = clamp(cursor.step_pointer->gate+1, 0, 128);
+                cursor.step_pointer->on = !cursor.step_pointer->on;
                 break;
             case 'W':
                 cursor.step_pointer->prob = clamp(cursor.step_pointer->prob+1, 0, 100);
                 break;
             case 'E':
-                cursor.step_pointer->every = clamp(cursor.step_pointer->every+1, 1, 128);
+                cursor.step_pointer->every = clamp(cursor.step_pointer->every+1, 1, 127);
                 break;
             case 'A':
-                cursor.step_pointer->gate = clamp(cursor.step_pointer->gate-1, 0, 128);
+                cursor.step_pointer->on = !cursor.step_pointer->on;
                 break;
             case 'S':
                 cursor.step_pointer->prob = clamp(cursor.step_pointer->prob-1, 0, 100);
                 break;
             case 'D':
-                cursor.step_pointer->every = clamp(cursor.step_pointer->every-1, 1, 128);
+                cursor.step_pointer->every = clamp(cursor.step_pointer->every-1, 1, 127);
                 break;
         }
 
@@ -221,7 +228,7 @@ void clock_step() {
     advance();
 }
 
-void * fast_tick(void * arg) {
+void * fast_tick() {
     while (ch != '0') {
         usleep(1000); t++;
         if (t % 128 == 0) {
@@ -232,10 +239,9 @@ void * fast_tick(void * arg) {
     return 0;
 }
 
-int main(int argc, char **argv) {
+int main() {
     arc = monome_open(DEFAULT_MONOME_DEVICE);
-    void * bb = NULL;
-    monome_register_handler(arc, MONOME_ENCODER_DELTA, delta, bb);
+    monome_register_handler(arc, MONOME_ENCODER_DELTA, delta, NULL);
     init_curses();
     playlist_init(&playlist);
     phrase_init(&phrases[0]);
@@ -246,7 +252,11 @@ int main(int argc, char **argv) {
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);
+
+    monome_event_loop(arc);
+
     pthread_join(tid[1], NULL);
+    monome_close(arc);
     endwin();
     return 0;
 }
