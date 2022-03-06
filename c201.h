@@ -1,3 +1,5 @@
+#pragma once
+
 #include <ncurses.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -23,7 +25,8 @@ int seqlen = 0;
 int count = 0;
 int pos = 0;
 int delta_counters[] = {0,0,0,0};
-bool debug = false;
+bool debug = true;
+bool arc_connected = false;
 
 // print checkers
 typedef struct {
@@ -168,10 +171,6 @@ Step * get_step(int n) {
     return &phrases[playlist.list[pidx]].steps[n];
 }
 
-Step * get_step_in_phrase(int step_number, int phrase) {
-    return & phrases[playlist.list[phrase]].steps[step_number];
-}
-
 void set_step(int n, Step * s) {
     *get_step(n) = *s;
 }
@@ -182,21 +181,18 @@ void cursor_resolve() { // clamp values, set up pointers, etc
     cursor.pos_in_sequence =    clamp(cursor.pos_in_sequence, 0, get_seqlen()-1);
 
     cursor.phrase_pointer = &   phrases[playlist.list[cursor.pos_in_playlist]];
-	cursor.step_pointer->dirty = true;
     cursor.step_pointer = &     cursor.phrase_pointer->steps[cursor.pos_in_phrase];
-	cursor.step_pointer->dirty = true;
 }
 
 void cursor_move(int delta) {
-    if (delta > 0) {
+    if (delta > 0 && cursor.pos_in_sequence < get_seqlen()-1) {
         cursor.pos_in_sequence++;
-        if (cursor.pos_in_phrase<cursor.phrase_pointer->len) { // is there room to advance within current phrase?
-            cursor.pos_in_phrase++;
-        } else {
+        cursor.pos_in_phrase++;
+        if (cursor.pos_in_phrase >= cursor.phrase_pointer->len) { // is there room to advance within current phrase?
             cursor.pos_in_playlist++;
             cursor.pos_in_phrase = 0;
         }
-    } else if (delta < 0) {
+    } else if (delta < 0 && cursor.pos_in_sequence >= 0) {
         cursor.pos_in_sequence--;
         if (cursor.pos_in_phrase > 0) {
             cursor.pos_in_phrase--;
@@ -210,7 +206,15 @@ void cursor_move(int delta) {
     cursor_resolve();
 }
 
-void delta(const monome_event_t *e) {
+void change_phrase(int delta) {
+    playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist] + delta, 0, 127);
+    cursor_resolve();
+    while (cursor.pos_in_phrase > 0) {
+        cursor_move(-1);
+    }
+}
+
+void arc_delta(const monome_event_t *e) {
     int d = e->encoder.delta; 
     int n = e->encoder.number;
     int change_to_send = 0;
@@ -222,7 +226,7 @@ void delta(const monome_event_t *e) {
         delta_counters[n] = ARC_SENSITIVITY;
         change_to_send = -1;
     }
-    switch (n) {
+    switch (n) { // which ring?
         case 0:
             cursor.step_pointer->cva = clamp(cursor.step_pointer->cva + (change_to_send / 1), 0, 127); 
             break;
@@ -238,4 +242,16 @@ void delta(const monome_event_t *e) {
     }
     screen.arc = true;
 	cursor.step_pointer->dirty = true;
+}
+
+void open_arc() {
+    if ((arc = monome_open(ARC_PATH_1))) {
+        monome_register_handler(arc, ARC_PATH_1, arc_delta, NULL);
+        arc_connected = true;
+    } else if ((arc = monome_open(ARC_PATH_2))) { 
+        monome_register_handler(arc, ARC_PATH_2, arc_delta, NULL);
+        arc_connected = true;
+    } else {
+        arc_connected = false;
+    }
 }
