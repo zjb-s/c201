@@ -39,7 +39,7 @@ void draw_table() {
                 attroff(A_REVERSE);
 				screen.count = false;
             }
-            if ((cursor.pos_in_sequence == next_step_to_print) && (screen.cursor)) {
+            if ((cursor.pos_in_sequence == next_step_to_print) && (screen.cursor || screen.screen)) {
                 mvprintw(py, px, "-----------------------------------");
 				screen.cursor = false;
             } 
@@ -90,10 +90,17 @@ void arc_redraw() {
     monome_led_ring_range(arc, 1, 0, (cursor.step_pointer->cvb / 2)-1, 15);
     monome_led_ring_range(arc, 2, 0, (cursor.step_pointer->dur / 2)-1, 15);
     screen.arc= false;
+	// split ring 3 into equal parts...
+	for (int i=0; i<cursor.phrase_pointer->len;i++) {
+		int led = (64 / cursor.phrase_pointer->len) * i;
+		monome_led_ring_set(arc, 3, led, (i == cursor.pos_in_phrase ? 15 : 8));
+		monome_led_ring_set(arc, 3, led-1, (i == cursor.pos_in_phrase ? 8 : 4));
+		monome_led_ring_set(arc, 3, led+1, (i == cursor.pos_in_phrase ? 8 : 4));
+	}	
 }
 
 void redraw() {
-	if (screen.screen) { clear(); } 
+	if (screen.screen) { erase(); } 
     attroff(A_REVERSE);
     //mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
 	draw_table();
@@ -239,7 +246,7 @@ void advance() {
 }
 
 void clock_step() {
-    //screen.screen = true;
+    screen.screen = true;
 	screen.count = true;
     advance();
 }
