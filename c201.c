@@ -117,7 +117,7 @@ void add_step() {
     for (int i = cursor.phrase_pointer->len-2; i >= cursor.pos_in_phrase; i--) {
         cursor.phrase_pointer->steps[cursor.pos_in_phrase + 1] = * cursor.step_pointer;
     }
-    step_init(cursor.step_pointer);
+    init_step(cursor.step_pointer);
 }
 
 void remove_step() {
@@ -264,13 +264,13 @@ void * fast_tick() {
 }
 
 int main() {
-    arc = monome_open(DEFAULT_MONOME_DEVICE);
-    monome_register_handler(arc, MONOME_ENCODER_DELTA, delta, NULL);
-	screen_init(&screen);
+    arc = monome_open(ARC_PATH_2);
+    monome_register_handler(arc, ARC_PATH_2, delta, NULL);
+	init_screen(&screen);
     init_curses();
-    playlist_init(&playlist);
-    phrase_init(&phrases[0]);
-    cursor_init(& cursor);
+    init_playlist(&playlist);
+    init_phrase(&phrases[0]);
+    init_cursor(& cursor);
     cursor.step_pointer = & phrases[0].steps[0];
     cursor.phrase_pointer = & phrases[0];
     clipboard = phrases[playlist.list[0]].steps[0];

@@ -6,7 +6,8 @@
 #include <monome.h>
 
 #define MAX_X 1
-#define DEFAULT_MONOME_DEVICE "/dev/ttyUSB0"
+#define ARC_PATH_1 "/dev/ttyUSB0"
+#define ARC_PATH_2 "/dev/tty.usbserial-m1100276"
 #define KNOBS 4
 #define ARC_SENSITIVITY 24
 
@@ -34,7 +35,7 @@ typedef struct {
 	bool cursor;
 } Screen;
 
-void screen_init(Screen * s) {
+void init_screen(Screen * s) {
 	s->arc = true;
 	s->screen = true;
 	s->playlist = true;
@@ -56,7 +57,7 @@ typedef struct {
 } Step;
 
 // step constructor                                 ---
-void step_init(Step * s) {
+void init_step(Step * s) {
 	s->dirty = true;
     step_id_counter++;
     s->id = step_id_counter;
@@ -77,11 +78,11 @@ typedef struct {
 } Phrase;
 
 // phrase constructor
-void phrase_init(Phrase * p) {
+void init_phrase(Phrase * p) {
     p->id = phrase_id_counter++;
     p->len = 1;
     p->pos = 0;
-    step_init(&p->steps[0]);
+    init_step(&p->steps[0]);
 }
 
 // playlist class
@@ -102,13 +103,13 @@ typedef struct {
 } Cursor;
 
 // cursor constructor
-void cursor_init(Cursor * c) {
+void init_cursor(Cursor * c) {
     c->pos_in_sequence = 0;
     c-> pos_in_playlist = 0;
     c->pos_in_phrase = 0;
 }
 //playlist constructor
-void playlist_init(Playlist * p) {
+void init_playlist(Playlist * p) {
     for(int i=0;i<128;i++) { p->list[i] = 0; }
     p->start = 0;
     p->end = 0;
@@ -139,18 +140,13 @@ Screen screen;
 Cursor cursor;
 Playlist playlist;
 Phrase phrases[128];
-Phrase * cursor_phrase;
-Phrase * playhead_phrase;
-Step * cursor_step;
-Step * playhead_step;
 Step * active_step;
 Step clipboard;
 monome_t * arc;
-uint8_t * arc_map[64];
 
 void init_phrase_library() {
     for (int i=0;i<127;i++) {
-        phrase_init(& phrases[i]);
+        init_phrase(& phrases[i]);
     }
 }
 
