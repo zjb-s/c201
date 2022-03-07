@@ -6,6 +6,95 @@
 
 #include "c201.h"
 
+int get_seqlen() {
+    int step_tally = 0;
+    for (int i=0;i<playlist.len;i++){
+        step_tally += phrases[playlist.list[i]].len;
+    }
+    seqlen = step_tally;
+    return seqlen;
+}
+
+Step * get_step(int n) {
+    int pidx = 0;
+    while(n >= 0 && n >= phrases[playlist.list[pidx]].len)
+        n -= phrases[playlist.list[ pidx++ ]].len;
+    return &phrases[playlist.list[pidx]].steps[n];
+}
+void set_step(int n, Step * s) {
+    *get_step(n) = *s;
+}
+
+void cursor_move(int delta) {
+    cursor.pos_in_sequence = clamp (cursor.pos_in_sequence + delta, 0, get_seqlen()-1);
+
+    int tally = 0;
+    for (int i = 0; i < playlist.len; i++) { 
+        tally += phrases[playlist.list[i]].len;
+        if (cursor.pos_in_sequence < tally) {
+            cursor.pos_in_playlist =    i;
+            cursor.pos_in_phrase =      (cursor.pos_in_sequence - tally) + phrases[playlist.list[i]].len;
+            break;
+        }
+    }
+
+    cursor.phrase_pointer = &   phrases[playlist.list[cursor.pos_in_playlist]];
+    cursor.step_pointer = &     cursor.phrase_pointer->steps[cursor.pos_in_phrase];
+}
+
+void change_phrase(int delta) {
+    int ph = cursor.pos_in_playlist;
+    cursor.pos_in_phrase = 0;
+    cursor.pos_in_sequence = 0;
+    cursor.pos_in_playlist = 0;
+    playlist.list[ph] = clamp(playlist.list[ph] + delta, 0, 127);
+    while (cursor.pos_in_playlist < ph) {
+        cursor_move(1);
+    }
+}
+
+void arc_delta(const monome_event_t *e) {
+    int d = e->encoder.delta; 
+    int n = e->encoder.number;
+    int change_to_send = 0;
+    delta_counters[n] += d;
+    if (delta_counters[n] > ARC_SENSITIVITY) {
+        delta_counters[n] = 0;
+        change_to_send = 1;
+    } else if (delta_counters[n] < 0) {
+        delta_counters[n] = ARC_SENSITIVITY;
+        change_to_send = -1;
+    }
+    switch (n) { // which ring?
+        case 0:
+            cursor.step_pointer->cva = clamp(cursor.step_pointer->cva + (change_to_send / 1), 0, 127); 
+            break;
+        case 1:
+            cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb + (change_to_send / 1), 0, 127); 
+            break;
+        case 2:
+            cursor.step_pointer->dur = clamp(cursor.step_pointer->dur + (change_to_send / 1), 0, 127); 
+            break;
+        case 3:
+            cursor_move(change_to_send);
+            break;
+    }
+    screen.arc = true;
+	cursor.step_pointer->dirty = true;
+}
+
+void open_arc() {
+    if ((arc = monome_open(ARC_PATH_1))) {
+        monome_register_handler(arc, MONOME_ENCODER_DELTA, arc_delta, NULL);
+        arc_connected = true;
+    } else if ((arc = monome_open(ARC_PATH_2))) { 
+        monome_register_handler(arc, MONOME_ENCODER_DELTA, arc_delta, NULL);
+        arc_connected = true;
+    } else {
+        arc_connected = false;
+    }
+}
+
 void draw_table() {
     int px = 15; int py = 8; int next_step_to_print = 0;
     move(py,px);
@@ -13,7 +102,9 @@ void draw_table() {
         Phrase * this_phrase = &phrases[playlist.list[i]];
 		if (screen.count || screen.screen) {
 			mvprintw(8+i, 1, "   ");
+            if (cursor.pos_in_playlist == i) { attron(A_REVERSE); }
 			mvprintw(8+i, 1, "%d", playlist.list[i]);
+            attroff(A_REVERSE);
 			screen.count = false;
 		} 
 
@@ -117,7 +208,7 @@ void add_step() {
         ph->steps[i + 1] = ph->steps[i];
     }
     cursor_move(1);
-    init_step(cursor.step_pointer);
+    //init_step(cursor.step_pointer);
 }
 
 void remove_step() {
@@ -216,11 +307,8 @@ void * keyboard_input() {
 
 void note() {
     char * command;
-    // asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
-    // system(command);
     asprintf(&command, "echo 'ii.jf.play_note(%d, %d)' | websocat ws://localhost:6666", get_step(pos)->cva, get_step(pos)->cvb);
     system(command);
-
     free(command);
 
     // todo implement midi out
