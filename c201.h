@@ -250,10 +250,10 @@ void arc_delta(const monome_event_t *e) {
 
 void open_arc() {
     if ((arc = monome_open(ARC_PATH_1))) {
-        monome_register_handler(arc, ARC_PATH_1, arc_delta, NULL);
+        monome_register_handler(arc, MONOME_ENCODER_DELTA, arc_delta, NULL);
         arc_connected = true;
     } else if ((arc = monome_open(ARC_PATH_2))) { 
-        monome_register_handler(arc, ARC_PATH_2, arc_delta, NULL);
+        monome_register_handler(arc, MONOME_ENCODER_DELTA, arc_delta, NULL);
         arc_connected = true;
     } else {
         arc_connected = false;

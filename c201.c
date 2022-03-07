@@ -216,9 +216,13 @@ void * keyboard_input() {
 
 void note() {
     char * command;
-    asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
+    // asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
+    // system(command);
+    asprintf(&command, "echo 'ii.jf.play_note(%d, %d)' | websocat ws://localhost:6666", get_step(pos)->cva, get_step(pos)->cvb);
     system(command);
+
     free(command);
+
     // todo implement midi out
     // todo implement gates
     // todo implement repeats
