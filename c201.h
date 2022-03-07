@@ -207,10 +207,14 @@ void cursor_move(int delta) {
 }
 
 void change_phrase(int delta) {
-    playlist.list[cursor.pos_in_playlist] = clamp(playlist.list[cursor.pos_in_playlist] + delta, 0, 127);
+    int ph = cursor.pos_in_playlist;
+    cursor.pos_in_phrase = 0;
+    cursor.pos_in_sequence = 0;
+    cursor.pos_in_playlist = 0;
     cursor_resolve();
-    while (cursor.pos_in_phrase > 0) {
-        cursor_move(-1);
+    playlist.list[ph] = clamp(playlist.list[ph] + delta, 0, 127);
+    while (cursor.pos_in_playlist < ph) {
+        cursor_move(1);
     }
 }
 

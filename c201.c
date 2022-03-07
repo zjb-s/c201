@@ -215,10 +215,10 @@ void * keyboard_input() {
 }
 
 void note() {
-    //char * command;
-    //asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
-    //system(command);
-    //free(command);
+    char * command;
+    asprintf(&command, "python3 pmod.py note %d %d", get_step(pos)->cva, get_step(pos)->cvb);
+    system(command);
+    free(command);
     // todo implement midi out
     // todo implement gates
     // todo implement repeats
@@ -238,7 +238,7 @@ void advance() {
                 if (get_step((old_pos+i) % get_seqlen())->dur) {
                     pos = (old_pos+i) % get_seqlen();
 					screen.count = true;
-                    //note();
+                    note();
                     break;
                 }
             }
