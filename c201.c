@@ -32,7 +32,7 @@ void deselect_all() {
     }
 }
 
-void cursor_move(int delta) {
+void cursor_move(int delta) { // 0 delta just refreshes step values without 
     cursor.pos_in_sequence = clamp (cursor.pos_in_sequence + delta, 0, get_seqlen()-1);
 
     // handle cursor ints
@@ -136,19 +136,21 @@ void open_arc() {
 }
 
 void draw_table() {
-    int px = 15; int py = 8; int next_step_to_print = 0;
+    int px = START_X; int py = START_Y; int next_step_to_print = 0;
     move(py,px);
     for(int i=0; i<playlist.len;i++) { // for each phrase in the playlist
         Phrase * this_phrase = &phrases[playlist.list[i]];
         if (cursor.pos_in_playlist == i) { attron(A_REVERSE); }
-        mvprintw(8+i, 1, "%d", playlist.list[i]);
+        mvprintw(5+i, 1, "%d", playlist.list[i]);
         attroff(A_REVERSE);
 
         // draw phrase divider
-            move(py,px-6);
+        move(py,px-6);
         for (int j = 1; j < COLS-1-px; j++) {
             printw("'");
         }
+
+        // draw playlist
         attron(A_REVERSE);
         mvprintw(py,px-6,"|%d.", playlist.list[i]);
         attroff(A_REVERSE);
@@ -182,10 +184,8 @@ void draw_table() {
 
 void draw_context() {
     int bottom = getmaxy(stdscr)-2;
-    mvprintw(5, 15, "cv.a   cv.b   dur    gate   prob   ev    id");
-    mvprintw(bottom, 2, "phrase view"); //todo implement movement view & arrangement view
-    mvprintw(bottom, 30, "clipboard step: [%d, %d, %d, %d]", clipboard.cva, clipboard.cvb, clipboard.dur, clipboard.on);
-    mvprintw(bottom -1, 2, "seqlen: %d", get_seqlen());
+    mvprintw(START_Y-1, START_X, "cv.a   cv.b   dur    gate   prob   ev    id");
+    mvprintw(bottom -1, 2, "seqlen: %d, clipboard size: %d", get_seqlen(), clipboard_size);
 
     if (debug) {
         attron(A_REVERSE);
@@ -230,6 +230,26 @@ void redraw() {
     screen_dirty = false;
 }
 
+void add_phrase() {
+    playlist.len = clamp(playlist.len+1, 0, 127);
+    for (int i = playlist.len-1; i>= cursor.pos_in_playlist; i--) {
+        playlist.list[i + 1] = playlist.list[i];
+    }
+    change_phrase(0);
+    arc_dirty = true;
+}
+
+void remove_phrase() {
+    if (playlist.len > 1) { // don't remove last phrase
+        for (int i = cursor.pos_in_playlist; i < playlist.len; i++) {
+            playlist.list[i] = playlist.list[i + 1];
+        }
+        playlist.len = clamp (playlist.len-1, 0, 127);
+        cursor_move(0);
+    }
+    arc_dirty = true;
+}
+
 void add_step() {
     Phrase * ph = cursor.phrase_pointer;
     ph->len = clamp(ph->len+1, 0, 127);
@@ -237,9 +257,10 @@ void add_step() {
         ph->steps[i + 1] = ph->steps[i];
     }
     cursor_move(1);
+
+    // plumbing
     step_id_counter++;
     cursor.step_pointer->id = step_id_counter;
-    //init_step(cursor.step_pointer);
     arc_dirty = true;
 }
 
@@ -250,7 +271,8 @@ void remove_step() {
             ph->steps[i] = ph->steps[i+1];
         }
         ph->len = clamp(ph->len-1, 0, 127);
-        cursor_move(-1);
+        cursor_move(0);
+        if (cursor.pos_in_phrase == 0) { cursor_move(-1); }
     }
     arc_dirty = true;
 }
@@ -263,6 +285,26 @@ void toggle_visual_mode() {
         deselect_all();
     }
     cursor.step_pointer->selected = true;
+}
+
+void copy_step() {
+    clipboard_size = 0;
+    for (int i=0; i<128;i++) {
+        for (int j=0;j<128;j++) {
+            if (phrases[i].steps[j].selected) {
+                clipboard[clipboard_size] = & phrases[i].steps[j];
+                clipboard_size++;
+            }
+        }
+    }
+}
+
+void paste_step() {
+    for (int i=0;i<clipboard_size;i++) {
+        add_step();
+        set_step(cursor.pos_in_sequence, clipboard[i]);
+    }
+    deselect_all();
 }
 
 void change_step_attribute(int attr, int d) {
@@ -322,6 +364,9 @@ void * keyboard_input() {
             num_key(ch);
         }
         switch (ch) {
+            case '`':
+                clear();
+                break;
 			case '~':
 				debug = ! debug;
 				break;
@@ -337,11 +382,17 @@ void * keyboard_input() {
 			case KEY_RIGHT:
                 cursor_jump(1);
  				break;
+            case 'h':
+                cursor_jump(-1);
+                break;
             case 'k':
                 cursor_move(-1);
                 break;
             case 'j':
                 cursor_move(1);
+                break;
+            case 'l':
+                cursor_jump(1);
                 break;
             case ' ':
                 toggle_visual_mode();
@@ -352,6 +403,12 @@ void * keyboard_input() {
             case '-':
                 remove_step();
                 break;
+            case '+':
+                add_phrase();
+                break;
+            case '_':
+                remove_phrase();
+                break;
             case ']':
                 change_phrase(1);
                 break;
@@ -359,15 +416,19 @@ void * keyboard_input() {
                 change_phrase(-1);
                 break;
             case 'x':
-                clipboard = * cursor.step_pointer;
+                copy_step();
                 remove_step();
+                // clipboard = * cursor.step_pointer;
+                // remove_step();
                 break;
             case 'c':
-                clipboard = * cursor.step_pointer;
+                copy_step();
+                // clipboard = * cursor.step_pointer;
                 break;
             case 'v':
-                add_step();
-                set_step(y+1, &clipboard);
+                paste_step();
+                // add_step();
+                // set_step(y+1, &clipboard);
                 break;
             case 'q':
                 change_step_attribute(0, 1);
@@ -415,10 +476,14 @@ void * keyboard_input() {
 
 void note() {
     char * command;
-    asprintf(&command, "echo 'ii.jf.play_note(%d, %d)' | websocat ws://localhost:6666", get_step(pos)->cva, get_step(pos)->cvb);
-    system(command);
-    free(command);
+    //asprintf(&command, "echo 'ii.jf.play_note(%d, %d)' | websocat ws://localhost:6666", get_step(pos)->cva, get_step(pos)->cvb);
+    // asprintf(&command, "echo 'playnote(%d, %d)' > pipe", get_step(pos)->cva, get_step(pos)->cvb);
+    // system(command);
+    // free(command);
 
+    fprintf(fp, "print('test')");
+    fflush(fp);
+    //fprintf(fp, "echo 'ii.jf.play_note(%d, %d)' > pipe", get_step(pos)->cva, get_step(pos)->cvb);
     // todo implement midi out
     // todo implement gates
     // todo implement repeats
@@ -463,23 +528,27 @@ void * fast_tick() {
 }
 
 int main() {
+
+    //open
     open_arc();
     init_curses();
     init_playlist(&playlist);
     for (int i=0;i<128;i++) { init_phrase(&phrases[i]); }
-    init_cursor(& cursor);
-    cursor.step_pointer = & phrases[0].steps[0];
-    cursor.phrase_pointer = & phrases[0];
-    clipboard = phrases[playlist.list[0]].steps[0];
-    visual = false;
+    init_cursor(& cursor); cursor_move(0);
+    clipboard[0] = & phrases[0].steps[0];
+
+
+    fp = fopen("pipe", "w");
+    //system('cat pipe | websocat ws://localhost:6666 &');
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);
-
     if (arc_connected) { monome_event_loop(arc); }
 
+    //close
     pthread_join(tid[1], NULL);
     if (arc_connected) { monome_close(arc); }
     endwin();
+    fclose(fp);
     return 0;
 }

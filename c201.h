@@ -13,14 +13,14 @@
 #define KNOBS 4
 #define ARC_SENSITIVITY 24
 #define EXIT_KEY '\\'
+#define START_X 15
+#define START_Y 3
 
 // global variables
 int every_counter = 0;
 int step_id_counter = 1;
 int phrase_id_counter = 0;
-int ch = ' ';
-int y = 0;
-int x = 0;
+int ch = '"';
 int t = 0;
 int seqlen = 0;
 int count = 0;
@@ -30,9 +30,11 @@ bool debug = true;
 bool arc_connected = false;
 bool screen_dirty = true;
 bool arc_dirty = true;
-bool visual;
+bool visual = false;
 int select_origin = 0;
+int clipboard_size = 0;
 char numbers[] = {'1','2','3','4','5','6','7','8','9','0'};
+FILE * fp;
 
 
 // step class
@@ -64,7 +66,7 @@ void init_step(Step * s) {
 typedef struct {
     int id;
     int len;
-    int pos;
+    //int pos;
     Step steps[128];
 } Phrase;
 
@@ -72,7 +74,7 @@ typedef struct {
 void init_phrase(Phrase * p) {
     p->id = phrase_id_counter++;
     p->len = 1;
-    p->pos = 0;
+    //p->pos = 0;
     init_step(&p->steps[0]);
 }
 
@@ -140,7 +142,7 @@ Cursor cursor;
 Playlist playlist;
 Phrase phrases[128];
 Step * active_step;
-Step clipboard;
+Step * clipboard[128];
 monome_t * arc;
 
 void init_phrase_library() {
