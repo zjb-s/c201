@@ -25,9 +25,17 @@ void set_step(int n, Step * s) {
     *get_step(n) = *s;
 }
 
+void deselect_all() {
+    for (int i=0;i<get_seqlen();i++) { 
+        Step * s = get_step(i);
+        s->selected = false;
+    }
+}
+
 void cursor_move(int delta) {
     cursor.pos_in_sequence = clamp (cursor.pos_in_sequence + delta, 0, get_seqlen()-1);
 
+    // handle cursor ints
     int tally = 0;
     for (int i = 0; i < playlist.len; i++) { 
         tally += phrases[playlist.list[i]].len;
@@ -37,9 +45,41 @@ void cursor_move(int delta) {
             break;
         }
     }
-
+    // handle cursor pointers
     cursor.phrase_pointer = &   phrases[playlist.list[cursor.pos_in_playlist]];
     cursor.step_pointer = &     cursor.phrase_pointer->steps[cursor.pos_in_phrase];
+
+    // handle step selections
+    deselect_all();
+    cursor.step_pointer->selected = true;
+    if (visual) {
+        int a = cursor.pos_in_sequence > select_origin ? select_origin : cursor.pos_in_sequence;
+        int b = cursor.pos_in_sequence < select_origin ? select_origin : cursor.pos_in_sequence;
+        for (int i = a; i <= b; i++) {
+            Step * s = get_step(i);
+            s->selected = true;
+        }
+    }
+}
+
+void cursor_jump(int delta) {
+    if (delta > 0) {
+        if (cursor.pos_in_phrase >= cursor.phrase_pointer->len-1) {
+            cursor_move(1);
+        } else {
+            while (cursor.pos_in_phrase < cursor.phrase_pointer->len-1) {
+                cursor_move(1);
+            }
+        }
+    } else if (delta < 0) {
+        if (cursor.pos_in_phrase <= 0) {
+            cursor_move(-1);
+        } else {
+            while (cursor.pos_in_phrase > 0) {
+                cursor_move(-1);
+            }
+        }
+    }
 }
 
 void change_phrase(int delta) {
@@ -51,6 +91,7 @@ void change_phrase(int delta) {
     while (cursor.pos_in_playlist < ph) {
         cursor_move(1);
     }
+    arc_dirty = true;
 }
 
 void arc_delta(const monome_event_t *e) {
@@ -79,8 +120,7 @@ void arc_delta(const monome_event_t *e) {
             cursor_move(change_to_send);
             break;
     }
-    screen.arc = true;
-	cursor.step_pointer->dirty = true;
+    arc_dirty = true; screen_dirty = true;
 }
 
 void open_arc() {
@@ -100,53 +140,41 @@ void draw_table() {
     move(py,px);
     for(int i=0; i<playlist.len;i++) { // for each phrase in the playlist
         Phrase * this_phrase = &phrases[playlist.list[i]];
-		if (screen.count || screen.screen) {
-			mvprintw(8+i, 1, "   ");
-            if (cursor.pos_in_playlist == i) { attron(A_REVERSE); }
-			mvprintw(8+i, 1, "%d", playlist.list[i]);
-            attroff(A_REVERSE);
-			screen.count = false;
-		} 
+        if (cursor.pos_in_playlist == i) { attron(A_REVERSE); }
+        mvprintw(8+i, 1, "%d", playlist.list[i]);
+        attroff(A_REVERSE);
 
         // draw phrase divider
-		if (screen.screen) {
-			 move(py,px-6);
-        	for (int j = 1; j < COLS-1-px; j++) {
-        	    printw("'");
-        	}
-        	attron(A_REVERSE);
-        	mvprintw(py,px-6,"      ");
-        	mvprintw(py,px-6,"|%d.", playlist.list[i]);
-        	attroff(A_REVERSE);
-		}
+            move(py,px-6);
+        for (int j = 1; j < COLS-1-px; j++) {
+            printw("'");
+        }
+        attron(A_REVERSE);
+        mvprintw(py,px-6,"|%d.", playlist.list[i]);
+        attroff(A_REVERSE);
         py++;
 
         //draw table content
         for (int k = 0; k < this_phrase->len; k++) {
 			Step * this_step = get_step(next_step_to_print);
-            if ((pos == next_step_to_print) && (screen.screen || screen.count)) { // count indicator / playhead
+            if (pos == next_step_to_print) { // count indicator / playhead
                 attron(A_REVERSE);
 				mvprintw(py,px+45," %d ", count);
                 attroff(A_REVERSE);
-				screen.count = false;
             }
             if (cursor.pos_in_sequence == next_step_to_print) {
                 mvprintw(py, px, "-----------------------------------");
-				screen.cursor = false;
             } 
             mvprintw(py, px-6,      "|%d.", k);
+            if (this_step->selected && visual) { attron(A_REVERSE); }
             mvprintw(py, px+0,      "%d", this_step->cva);
             mvprintw(py, px+7,      "%d", this_step->cvb);
             mvprintw(py, px+14,     "%d", this_step->dur);
-            if (this_step->on) { 
-                attron(A_REVERSE);
-                mvprintw(py, px+21,     "   ");
-                attroff(A_REVERSE);
-            }
+            if (this_step->on) { mvprintw(py, px+21,     "ON"); }
             mvprintw(py, px+28,     "%d", this_step->prob);
             mvprintw(py, px+35,     "%d", this_step->every);
             mvprintw(py, px+42,     "%d", this_step->id);
-
+            attroff(A_REVERSE);
 			py++; next_step_to_print++;
         }
     }
@@ -169,6 +197,7 @@ void draw_context() {
         mvprintw(8,80,"pos_in_phrase: %d", cursor.pos_in_phrase);
         mvprintw(9,80,"cursor step cva: %d", cursor.step_pointer->cva);
         mvprintw(10,80,"cursor step id: %d", cursor.step_pointer->id);
+        mvprintw(11,80,"visual? %d", visual);
     }
 }
 
@@ -178,7 +207,7 @@ void arc_redraw() {
     monome_led_ring_range(arc, 0, 0, (cursor.step_pointer->cva / 2)-1, 15);
     monome_led_ring_range(arc, 1, 0, (cursor.step_pointer->cvb / 2)-1, 15);
     monome_led_ring_range(arc, 2, 0, (cursor.step_pointer->dur / 2)-1, 15);
-    screen.arc= false;
+    arc_dirty= false;
 	// split ring 3 into equal parts...
 	for (int i=0; i<cursor.phrase_pointer->len;i++) {
 		int led = (64 / cursor.phrase_pointer->len) * i;
@@ -189,16 +218,16 @@ void arc_redraw() {
 }
 
 void redraw() {
-	if (screen.screen) { erase(); } 
+	if (screen_dirty) { erase(); } 
     attroff(A_REVERSE);
     //mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
 	draw_table();
     draw_context();
-    if (screen.arc && arc_connected) {
+    if (arc_dirty && arc_connected) {
         arc_redraw();
     }
     refresh();
-    screen.screen = false;
+    screen_dirty = false;
 }
 
 void add_step() {
@@ -208,7 +237,10 @@ void add_step() {
         ph->steps[i + 1] = ph->steps[i];
     }
     cursor_move(1);
+    step_id_counter++;
+    cursor.step_pointer->id = step_id_counter;
     //init_step(cursor.step_pointer);
+    arc_dirty = true;
 }
 
 void remove_step() {
@@ -220,15 +252,81 @@ void remove_step() {
         ph->len = clamp(ph->len-1, 0, 127);
         cursor_move(-1);
     }
+    arc_dirty = true;
+}
+
+void toggle_visual_mode() {
+    visual = ! visual;
+    if (visual ) {
+        select_origin = cursor.pos_in_sequence;
+    } else {
+        deselect_all();
+    }
+    cursor.step_pointer->selected = true;
+}
+
+void change_step_attribute(int attr, int d) {
+    Step * s;
+    int steps_already_checked[128] = {0};
+    int step_check_position = 0;
+    for (int i=0;i<get_seqlen();i++) { 
+        s = get_step(i);
+        bool skip = false;
+        for (int i=0;i<128;i++) { // if we've already modified this step, skip it! This prevents phrase multiples from messing up this function
+            if (steps_already_checked[i] == s->id) {
+                skip = true;
+                break;
+            }
+        }
+        if (s->selected && ! skip) {
+            switch (attr) {
+                case 0:
+                    s->cva = clamp(s->cva+d,0,127);
+                    break;
+                case 1:
+                    s->cvb = clamp(s->cvb+d,0,127);
+                    break;
+                case 2:
+                    s->dur = clamp(s->dur+d,0,127);
+                    break;
+                case 3:
+                    s->on = ! s->on;
+                    break;
+                case 4:
+                    s->prob = clamp(s->prob+d,0,100);
+                    break;
+                case 5:
+                    s->every = clamp(s->every+d,0,127);
+                    break;
+            }
+            steps_already_checked[step_check_position] = s->id;
+            step_check_position++;
+        }
+    }
+}
+
+void num_key(char c) {
+    int k = c - '0';
+    Step * s;
+    if (k == 0) {
+        s = cursor.step_pointer;
+    } else {
+        s = & cursor.phrase_pointer->steps[k-1];
+    }
+    s->on = ! s->on;
 }
 
 void * keyboard_input() {
-    while (ch != '0') {
+    while (ch != EXIT_KEY) {
+        if (is_member_of(ch, numbers, 10)) {
+            num_key(ch);
+        }
         switch (ch) {
 			case '~':
 				debug = ! debug;
 				break;
             case KEY_LEFT:
+                cursor_jump(-1);
                 break;
             case KEY_DOWN: 
                 cursor_move(1);
@@ -237,7 +335,17 @@ void * keyboard_input() {
                 cursor_move(-1);
                 break;
 			case KEY_RIGHT:
+                cursor_jump(1);
  				break;
+            case 'k':
+                cursor_move(-1);
+                break;
+            case 'j':
+                cursor_move(1);
+                break;
+            case ' ':
+                toggle_visual_mode();
+                break;
             case '=':
                 add_step();
                 break;
@@ -262,45 +370,45 @@ void * keyboard_input() {
                 set_step(y+1, &clipboard);
                 break;
             case 'q':
-                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva+1, 0, 127);
+                change_step_attribute(0, 1);
                 break;
             case 'w':
-                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb+1, 0, 127);
+                change_step_attribute(1, 1);
                 break;
             case 'e':
-                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur+1, 0, 127);
+                change_step_attribute(2, 1);
                 break;
             case 'a':
-                cursor.step_pointer->cva = clamp(cursor.step_pointer->cva-1, 0, 127);
+                change_step_attribute(0, -1);
                 break;
             case 's':
-                cursor.step_pointer->cvb = clamp(cursor.step_pointer->cvb-1, 0, 127);
+                change_step_attribute(1, -1);
                 break;
             case 'd':
-                cursor.step_pointer->dur = clamp(cursor.step_pointer->dur-1, 0, 127);
+                change_step_attribute(2, -1);
                 break;
             case 'Q':
-                cursor.step_pointer->on = !cursor.step_pointer->on;
+                change_step_attribute(3, 1);
                 break;
             case 'W':
-                cursor.step_pointer->prob = clamp(cursor.step_pointer->prob+1, 0, 100);
+                change_step_attribute(4, 1);
                 break;
             case 'E':
-                cursor.step_pointer->every = clamp(cursor.step_pointer->every+1, 1, 127);
+                change_step_attribute(5, 1);
                 break;
             case 'A':
-                cursor.step_pointer->on = !cursor.step_pointer->on;
+                change_step_attribute(3, -1);
                 break;
             case 'S':
-                cursor.step_pointer->prob = clamp(cursor.step_pointer->prob-1, 0, 100);
+                change_step_attribute(4, -1);
                 break;
             case 'D':
-                cursor.step_pointer->every = clamp(cursor.step_pointer->every-1, 1, 127);
+                change_step_attribute(5, -1);
                 break;
         }
 
         ch = getch();
-        screen.screen = true;
+        screen_dirty = true;
     }
     return 0;
 }
@@ -329,7 +437,6 @@ void advance() {
             for (int i=1;i<get_seqlen();i++) {
                 if (get_step((old_pos+i) % get_seqlen())->dur) {
                     pos = (old_pos+i) % get_seqlen();
-					screen.count = true;
                     note();
                     break;
                 }
@@ -339,26 +446,24 @@ void advance() {
 }
 
 void clock_step() {
-    screen.screen = true;
-	screen.count = true;
+    screen_dirty = true;
     advance();
 }
 
 void * fast_tick() {
-    while (ch != '0') {
+    while (ch != EXIT_KEY) {
         usleep(1000); t++;
         if (t % 128 == 0) {
             clock_step();
         }
-        if (screen.screen) { redraw(); }
-	if(screen.arc && arc_connected) { arc_redraw(); }
+        if (screen_dirty) { redraw(); }
+	if(arc_dirty && arc_connected) { arc_redraw(); }
     }
     return 0;
 }
 
 int main() {
     open_arc();
-	init_screen(&screen);
     init_curses();
     init_playlist(&playlist);
     for (int i=0;i<128;i++) { init_phrase(&phrases[i]); }
@@ -366,6 +471,7 @@ int main() {
     cursor.step_pointer = & phrases[0].steps[0];
     cursor.phrase_pointer = & phrases[0];
     clipboard = phrases[playlist.list[0]].steps[0];
+    visual = false;
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);

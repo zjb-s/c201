@@ -12,6 +12,7 @@
 #define ARC_PATH_2 "/dev/tty.usbserial-m1100276"
 #define KNOBS 4
 #define ARC_SENSITIVITY 24
+#define EXIT_KEY '\\'
 
 // global variables
 int every_counter = 0;
@@ -27,29 +28,15 @@ int pos = 0;
 int delta_counters[] = {0,0,0,0};
 bool debug = true;
 bool arc_connected = false;
+bool screen_dirty = true;
+bool arc_dirty = true;
+bool visual;
+int select_origin = 0;
+char numbers[] = {'1','2','3','4','5','6','7','8','9','0'};
 
-// print checkers
-typedef struct {
-	bool arc;
-	bool screen;
-	bool playlist;
-	bool count;
-	bool table;
-	bool cursor;
-} Screen;
-
-void init_screen(Screen * s) {
-	s->arc = true;
-	s->screen = true;
-	s->playlist = true;
-	s->count = true;
-	s->table = true;
-	s->cursor = true;
-}
 
 // step class
 typedef struct {
-	bool dirty;
     int id;
     int cva;
     int cvb;
@@ -57,11 +44,11 @@ typedef struct {
     bool on;
     int prob;
     int every;
+    bool selected;
 } Step;
 
 // step constructor                                 ---
 void init_step(Step * s) {
-	s->dirty = true;
     step_id_counter++;
     s->id = step_id_counter;
     s->cva = 12;
@@ -70,6 +57,7 @@ void init_step(Step * s) {
     s->on = true;
     s->prob = 100;
     s->every = 1;
+    s->selected = false;
 }
 
 // phrase class
@@ -128,6 +116,15 @@ int clamp(int n, int min, int max) {
     return n;
 }
 
+bool is_member_of(char val_to_check, char * array, int size) {
+    for (int i=0;i<size;i++) {
+        if (val_to_check == array[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // initialize curses options                        ---
 void init_curses() {
     initscr();
@@ -139,7 +136,6 @@ void init_curses() {
 
 // more global variables
 pthread_t tid[16];
-Screen screen;
 Cursor cursor;
 Playlist playlist;
 Phrase phrases[128];
