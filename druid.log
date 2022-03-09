@@ -1,2 +1,1 @@
-2022-03-08 17:45:40,885 druid.crow      INFO    MainProcess connected to crow on /dev/cu.usbmodem346F365435381
-2022-03-08 18:09:43,802 druid.crow      ERROR   MainProcess lost connection: read failed: [Errno 6] Device not configured
+2022-03-08 19:10:17,858 druid.crow      INFO    MainProcess connected to crow on /dev/cu.usbmodem346F365435381

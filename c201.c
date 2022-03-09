@@ -475,18 +475,8 @@ void * keyboard_input() {
 }
 
 void note() {
-    char * command;
-    //asprintf(&command, "echo 'ii.jf.play_note(%d, %d)' | websocat ws://localhost:6666", get_step(pos)->cva, get_step(pos)->cvb);
-    // asprintf(&command, "echo 'playnote(%d, %d)' > pipe", get_step(pos)->cva, get_step(pos)->cvb);
-    // system(command);
-    // free(command);
-
-    fprintf(fp, "print('test')");
+    fprintf(fp, "playnote(%d, %d)\n", get_step(pos)->cva, get_step(pos)->on);
     fflush(fp);
-    //fprintf(fp, "echo 'ii.jf.play_note(%d, %d)' > pipe", get_step(pos)->cva, get_step(pos)->cvb);
-    // todo implement midi out
-    // todo implement gates
-    // todo implement repeats
 }
 
 void advance() {
@@ -511,6 +501,8 @@ void advance() {
 }
 
 void clock_step() {
+    fprintf(fp, "output[4]()\n");
+    fflush(fp);
     screen_dirty = true;
     advance();
 }
@@ -539,7 +531,7 @@ int main() {
 
 
     fp = fopen("pipe", "w");
-    //system('cat pipe | websocat ws://localhost:6666 &');
+    //system("cat pipe | websocat ws://localhost:6666 &");
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);
