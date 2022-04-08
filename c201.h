@@ -34,7 +34,10 @@ bool visual = false;
 int select_origin = 0;
 int clipboard_size = 0;
 char numbers[] = {'1','2','3','4','5','6','7','8','9','0'};
+char delta_keys[] = {'q','a','w','s','e','d','Q','A','W','S','E','D'};
+int test_counter = 0;
 FILE * fp;
+bool maths = false;
 
 
 // step class
@@ -106,7 +109,7 @@ void init_playlist(Playlist * p) {
     for(int i=0;i<128;i++) { p->list[i] = 0; }
     p->start = 0;
     p->end = 0;
-    p->len = 4;
+    p->len = 1;
 }
 
 // utilities                                        ---

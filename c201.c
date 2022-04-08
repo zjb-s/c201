@@ -152,7 +152,7 @@ void draw_table() {
 
         // draw playlist
         attron(A_REVERSE);
-        mvprintw(py,px-6,"|%d.", playlist.list[i]);
+        mvprintw(py,px-6,"|%d. len: %d ", playlist.list[i], phrases[playlist.list[i]].len);
         attroff(A_REVERSE);
         py++;
 
@@ -185,9 +185,24 @@ void draw_table() {
 void draw_context() {
     int bottom = getmaxy(stdscr)-2;
     mvprintw(START_Y-1, START_X, "cv.a   cv.b   dur    gate   prob   ev    id");
-    mvprintw(bottom -1, 2, "seqlen: %d, clipboard size: %d", get_seqlen(), clipboard_size);
+
+    if (maths) {
+        int py = bottom-4;
+
+        attron(A_REVERSE);
+        move(py, 1);
+        for (int i=0;i<COLS-1;i++) {
+            printw(" ");
+        }
+        mvprintw(py, 3, "-- MATHS --");
+        attroff(A_REVERSE);
+        py++;
+        mvprintw(START_Y-1, START_X, "cv.a   cv.b   dur    gate   prob   ev    id");
+
+    }
 
     if (debug) {
+        mvprintw(bottom -1, 2, "seqlen: %d, clipboard size: %d", get_seqlen(), clipboard_size);
         attron(A_REVERSE);
         mvprintw(1,1,"DEBUG MODE");
         mvprintw(5,80,"DEBUG PANEL");
@@ -220,7 +235,9 @@ void arc_redraw() {
 void redraw() {
 	if (screen_dirty) { erase(); } 
     attroff(A_REVERSE);
-    //mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
+    if (debug) {
+        mvprintw(1,1,"cursor: %d, pos: %d, phrase 0 len: %d", cursor.pos_in_sequence, pos, phrases[playlist.list[0]].len);
+    }
 	draw_table();
     draw_context();
     if (arc_dirty && arc_connected) {
@@ -231,11 +248,20 @@ void redraw() {
 }
 
 void add_phrase() {
+    int old_pos = cursor.pos_in_playlist;
     playlist.len = clamp(playlist.len+1, 0, 127);
     for (int i = playlist.len-1; i>= cursor.pos_in_playlist; i--) {
         playlist.list[i + 1] = playlist.list[i];
     }
     change_phrase(0);
+    cursor.pos_in_phrase = 0;
+    cursor.pos_in_playlist = 0;
+    cursor.pos_in_sequence = 0;
+    cursor_move(0);
+    while (cursor.pos_in_playlist <= old_pos) {
+        cursor_move(1);
+    }
+
     arc_dirty = true;
 }
 
@@ -297,6 +323,7 @@ void copy_step() {
             }
         }
     }
+    deselect_all();
 }
 
 void paste_step() {
@@ -314,7 +341,7 @@ void change_step_attribute(int attr, int d) {
     for (int i=0;i<get_seqlen();i++) { 
         s = get_step(i);
         bool skip = false;
-        for (int i=0;i<128;i++) { // if we've already modified this step, skip it! This prevents phrase multiples from messing up this function
+        for (int i=0;i<128;i++) { // if we've already modified this step, skip it; this prevents phrase multiples from messing up this function
             if (steps_already_checked[i] == s->id) {
                 skip = true;
                 break;
@@ -358,12 +385,30 @@ void num_key(char c) {
     s->on = ! s->on;
 }
 
+// void delta_key(char c) {
+//     int delta_key_index = 0;
+//     int d = 0;
+//     for (int i=0;i<12;i++) {
+//         if (c == delta_keys[i]) {
+//             delta_key_index = i;
+//             break;
+//         }
+//     }
+//     d = (delta_key_index % 2) // todo finish
+// }
+
 void * keyboard_input() {
     while (ch != EXIT_KEY) {
         if (is_member_of(ch, numbers, 10)) {
             num_key(ch);
         }
+        // if (is_member_of(ch, delta_keys, 12) {
+        //     delta_key(ch);
+        // }
         switch (ch) {
+            case 'm':
+                maths = ! maths;
+                break;
             case '`':
                 clear();
                 break;
@@ -418,17 +463,12 @@ void * keyboard_input() {
             case 'x':
                 copy_step();
                 remove_step();
-                // clipboard = * cursor.step_pointer;
-                // remove_step();
                 break;
             case 'c':
                 copy_step();
-                // clipboard = * cursor.step_pointer;
                 break;
             case 'v':
                 paste_step();
-                // add_step();
-                // set_step(y+1, &clipboard);
                 break;
             case 'q':
                 change_step_attribute(0, 1);
@@ -475,8 +515,11 @@ void * keyboard_input() {
 }
 
 void note() {
-    fprintf(fp, "playnote(%d, %d)\n", get_step(pos)->cva, get_step(pos)->on);
-    fflush(fp);
+    //fprintf(fp, "playnote(%d, %d)\n", get_step(pos)->cva, get_step(pos)->on);
+    // fflush(fp);
+    char * command;
+    asprintf(&command, "echo 'playnote(%d, 1)' | minicom", 1); //get_step(pos)->cva);
+    system(command);
 }
 
 void advance() {
@@ -501,8 +544,9 @@ void advance() {
 }
 
 void clock_step() {
-    fprintf(fp, "output[4]()\n");
-    fflush(fp);
+    // fprintf(fp, "output[4]()\n");
+    // fflush(fp);
+    system("echo 'output[4]()' | minicom");
     screen_dirty = true;
     advance();
 }
@@ -515,6 +559,7 @@ void * fast_tick() {
         }
         if (screen_dirty) { redraw(); }
 	if(arc_dirty && arc_connected) { arc_redraw(); }
+
     }
     return 0;
 }
@@ -530,8 +575,7 @@ int main() {
     clipboard[0] = & phrases[0].steps[0];
 
 
-    fp = fopen("pipe", "w");
-    //system("cat pipe | websocat ws://localhost:6666 &");
+    //fp = fopen("pipe", "w");
 
     pthread_create(&tid[0], NULL, fast_tick, (void *) &tid[0]);
     pthread_create(&tid[1], NULL, keyboard_input, (void *) &tid[1]);
@@ -541,6 +585,6 @@ int main() {
     pthread_join(tid[1], NULL);
     if (arc_connected) { monome_close(arc); }
     endwin();
-    fclose(fp);
+    //fclose(fp);
     return 0;
 }
